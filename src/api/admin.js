@@ -92,6 +92,14 @@ export async function moderateReview(reviewId, action, reason) {
   return unwrap(res)
 }
 
+// ===== 활동 로그 (전체 유저) =====
+export async function getActivityLogs({ limit = 100, kind = 'all' } = {}) {
+  const res = await client.get('/api/admin/activity-logs', {
+    params: { limit, kind },
+  })
+  return unwrap(res) // { success, count, logs: [{ id, kind, user_id, nickname, time, title, detail, traffic_light, risk_score }] }
+}
+
 // ===== 챗봇 =====
 export async function getChatUsage({ from, to } = {}) {
   const res = await client.get('/api/admin/stats/chat/usage', {

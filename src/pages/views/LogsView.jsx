@@ -12,8 +12,7 @@ import {
   XCircle,
   ChevronDown,
 } from 'lucide-react'
-import { getAnalysisHistory } from '../../api/analysis'
-import { getSearchHistory, getRecentlyViewed } from '../../api/reviews'
+import { getActivityLogs } from '../../api/admin'
 
 const KIND_META = {
   analysis: { icon: FlaskConical, label: '분석', color: 'text-primary', bg: 'bg-primary-light' },
@@ -60,67 +59,28 @@ function LogsView({ user }) {
   const [query, setQuery] = useState('')
   const [debugOpen, setDebugOpen] = useState(false)
 
-  const analysisQuery = useQuery({
-    queryKey: ['analysis-history', userId, 50],
-    queryFn: () => getAnalysisHistory(userId, { page: 1, size: 50 }),
-    enabled: !!userId,
+  const logsQuery = useQuery({
+    queryKey: ['admin-activity-logs', 200],
+    queryFn: () => getActivityLogs({ limit: 200, kind: 'all' }),
   })
 
-  const searchQuery = useQuery({
-    queryKey: ['search-history', userId],
-    queryFn: () => getSearchHistory(userId),
-    enabled: !!userId,
-  })
+  const isLoading = logsQuery.isLoading
+  const allErrors = [logsQuery.error].filter(Boolean)
 
-  const viewQuery = useQuery({
-    queryKey: ['recently-viewed', userId],
-    queryFn: () => getRecentlyViewed(userId),
-    enabled: !!userId,
-  })
-
-  const isLoading =
-    analysisQuery.isLoading || searchQuery.isLoading || viewQuery.isLoading
-
-  const allErrors = [analysisQuery.error, searchQuery.error, viewQuery.error].filter(Boolean)
-
-  // 세 가지 활동을 통합해서 시간순 정렬
+  // 전체 유저 활동 (백엔드에서 통합·정렬되어 옴)
   const activities = useMemo(() => {
-    const items = []
-    ;(analysisQuery.data?.history ?? []).forEach((a) =>
-      items.push({
-        id: `a-${a.analysis_id}`,
-        kind: 'analysis',
-        time: a.created_at,
-        title: a.product_name ?? `Product #${a.product_id}`,
-        detail: a.summary ?? (a.analysis_type === 'OCR_ANALYSIS' ? 'OCR 분석' : '제품 검색 분석'),
-        meta: {
-          traffic_light: a.traffic_light,
-          risk_score: a.risk_score,
-          analysis_type: a.analysis_type,
-        },
-      })
-    )
-    ;(searchQuery.data?.search_history ?? []).forEach((s, i) =>
-      items.push({
-        id: `s-${i}-${s.created_at}`,
-        kind: 'search',
-        time: s.created_at,
-        title: s.keyword,
-        detail: '검색어',
-      })
-    )
-    ;(viewQuery.data?.products ?? []).forEach((p) =>
-      items.push({
-        id: `v-${p.product_id}-${p.viewed_at}`,
-        kind: 'view',
-        time: p.viewed_at,
-        title: p.product_name,
-        detail: `${p.brand_name ?? ''}${p.price ? ` · ${p.price.toLocaleString()}원` : ''}`,
-      })
-    )
-    items.sort((a, b) => String(b.time ?? '').localeCompare(String(a.time ?? '')))
-    return items
-  }, [analysisQuery.data, searchQuery.data, viewQuery.data])
+    return (logsQuery.data?.logs ?? []).map((l) => ({
+      id: l.id,
+      kind: l.kind,
+      time: l.time,
+      title: l.title,
+      detail: l.nickname ? `${l.nickname} · ${l.detail ?? ''}` : (l.detail ?? ''),
+      meta: {
+        traffic_light: l.traffic_light,
+        risk_score: l.risk_score,
+      },
+    }))
+  }, [logsQuery.data])
 
   const counts = {
     all: activities.length,
@@ -141,25 +101,13 @@ function LogsView({ user }) {
     return arr
   }, [activities, filter, query])
 
-  // 각 API 상태 (디버깅용)
+  // API 상태 (디버깅용)
   const apiStatus = [
     {
-      label: 'analysis/history',
-      endpoint: `/api/analysis/history/${userId}/`,
-      query: analysisQuery,
-      count: analysisQuery.data?.history?.length ?? 0,
-    },
-    {
-      label: 'review/search-history',
-      endpoint: `/api/review/search-history/${userId}/`,
-      query: searchQuery,
-      count: searchQuery.data?.search_history?.length ?? 0,
-    },
-    {
-      label: 'review/recently-viewed',
-      endpoint: `/api/review/recently-viewed/${userId}/`,
-      query: viewQuery,
-      count: viewQuery.data?.products?.length ?? 0,
+      label: 'admin/activity-logs',
+      endpoint: `/api/admin/activity-logs`,
+      query: logsQuery,
+      count: logsQuery.data?.logs?.length ?? 0,
     },
   ]
 
@@ -289,7 +237,7 @@ function LogsView({ user }) {
             <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
             <p className="text-[13px] text-text-sub">활동 기록 불러오는 중...</p>
           </div>
-        ) : filtered.length === 0 && allErrors.length === 3 ? (
+        ) : filtered.length === 0 && allErrors.length >= 1 ? (
           <div className="py-16 text-center">
             <AlertCircle size={24} className="text-danger mx-auto mb-2" />
             <p className="text-[13px] font-bold text-danger">활동 기록을 불러올 수 없습니다</p>
@@ -306,14 +254,9 @@ function LogsView({ user }) {
                   아직 활동 기록이 없습니다
                 </p>
                 <p className="text-[12px] text-text-sub max-w-md mx-auto leading-relaxed">
-                  현재 로그인한 계정으로
+                  전체 사용자가 성분 분석, 제품 검색·조회를 하면
                   <br />
-                  <strong>① 모바일 앱에서 성분 분석</strong>을 하거나
-                  <br />
-                  <strong>② 제품을 검색·조회</strong>해야 여기에 기록이 표시됩니다.
-                </p>
-                <p className="text-[11px] text-text-sub mt-3">
-                  위의 "API 연결 상태"를 열어보면 각 엔드포인트가 정상인지 확인할 수 있습니다.
+                  여기에 기록이 표시됩니다.
                 </p>
               </>
             )}
@@ -383,7 +326,7 @@ function LogsView({ user }) {
           </div>
         )}
         <p className="mt-3 text-[11px] text-text-sub">
-          전체 {activities.length}건 중 {filtered.length}건 표시 · 본인 활동만 표시됩니다
+          전체 {activities.length}건 중 {filtered.length}건 표시 · 전체 사용자 활동
         </p>
       </section>
     </div>
