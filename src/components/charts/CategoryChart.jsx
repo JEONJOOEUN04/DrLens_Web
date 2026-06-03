@@ -10,42 +10,21 @@ import {
   Cell,
 } from 'recharts'
 import { Loader2 } from 'lucide-react'
-import { listCategories, listByCategory } from '../../api/products'
+import { getProductsByCategory } from '../../api/admin'
 
 function CategoryChart() {
-  // 카테고리 목록
-  const { data: categoriesData, isLoading } = useQuery({
-    queryKey: ['categories'],
-    queryFn: listCategories,
-    staleTime: 1000 * 60 * 30,
-  })
-
-  // 모든 소분류 flatten (대분류 제외)
-  const subCategories = (categoriesData?.categories ?? [])
-    .flatMap((c) => c.subcategories ?? [])
-    .slice(0, 6)
-
-  // 각 카테고리별 제품 수 병렬 조회 (count 필드 사용)
-  const countQueries = useQuery({
-    queryKey: ['category-counts', subCategories.map((c) => c.category_id)],
-    queryFn: async () => {
-      const results = await Promise.all(
-        subCategories.map((c) =>
-          listByCategory(c.category_id, { page: 1, size: 1 }).catch(() => ({ count: 0 }))
-        )
-      )
-      return subCategories.map((c, i) => ({
-        category: c.category_name,
-        count: results[i]?.count ?? 0,
-      }))
-    },
-    enabled: subCategories.length > 0,
+  // 카테고리별 제품 수 (admin API에서 전체 집계)
+  const { data: byCategory, isLoading: fetching } = useQuery({
+    queryKey: ['products-by-category'],
+    queryFn: () => getProductsByCategory({ limit: 6 }),
     staleTime: 1000 * 60 * 10,
   })
 
-  const data = countQueries.data ?? []
+  const data = (byCategory?.distribution ?? []).map((d) => ({
+    category: d.category_name,
+    count: d.count,
+  }))
   const max = data.length ? Math.max(...data.map((d) => d.count)) : 0
-  const fetching = isLoading || countQueries.isLoading
 
   return (
     <div className="bg-card border border-line rounded-2xl p-5">

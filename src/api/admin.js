@@ -65,6 +65,13 @@ export async function getTopRatedProducts({ limit = 10, minReviews = 5 } = {}) {
   return unwrap(res)
 }
 
+export async function getProductsByCategory({ limit } = {}) {
+  const res = await client.get('/api/admin/products/by-category', {
+    params: { ...(limit && { limit }) },
+  })
+  return unwrap(res) // { success, distribution: [{ category_id, category_name, count }], total }
+}
+
 export async function listAdminReviews({
   page = 1,
   size = 20,
