@@ -7,19 +7,12 @@ import { listIngredients, searchIngredients } from '../../api/ingredients'
 
 const PAGE_SIZE = 50
 
-// risk_level → 안전도 등급 매핑 (1-3: safe, 4-6: warning, 7-10: danger)
-function riskToSafety(level) {
-  if (level == null) return 'unknown'
-  if (level <= 3) return 'safe'
-  if (level <= 6) return 'warning'
-  return 'danger'
-}
-
-const safetyStyle = {
-  safe: { bg: 'bg-safe/10', text: 'text-safe', label: '안전' },
-  warning: { bg: 'bg-warning/15', text: 'text-[#B58900]', label: '주의' },
-  danger: { bg: 'bg-danger/10', text: 'text-danger', label: '위험' },
-  unknown: { bg: 'bg-line/40', text: 'text-text-sub', label: '미분류' },
+// 플래그 기반 분류 (공식 고시 기준: EU 알레르겐 26종 + 식약처 사용제한 원료)
+function flagOf(ing) {
+  if (ing.allergy_flag) return 'allergy'
+  if (ing.irritant_flag) return 'irritant'
+  if (ing.moisturizing_flag || ing.soothing_flag) return 'benefit'
+  return 'general'
 }
 
 function useDebounce(value, delay = 350) {
@@ -33,7 +26,7 @@ function useDebounce(value, delay = 350) {
 
 function IngredientsView() {
   const [query, setQuery] = useState('')
-  const [safetyFilter, setSafetyFilter] = useState('all')
+  const [flagFilter, setFlagFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const debouncedQuery = useDebounce(query)
@@ -97,18 +90,19 @@ function IngredientsView() {
     return Math.ceil((200 * SCAN_SIZE) / PAGE_SIZE)
   }
 
-  // 클라이언트 사이드 안전도 필터 (API는 risk 필터 미지원)
+  // 클라이언트 사이드 플래그 필터
   const filtered = useMemo(() => {
-    if (safetyFilter === 'all') return all
-    return all.filter((ing) => riskToSafety(ing.risk_level) === safetyFilter)
-  }, [all, safetyFilter])
+    if (flagFilter === 'all') return all
+    return all.filter((ing) => flagOf(ing) === flagFilter)
+  }, [all, flagFilter])
 
-  // 현재 페이지 내 등급별 카운트
+  // 현재 페이지 내 플래그별 카운트
   const counts = useMemo(() => {
-    const c = { safe: 0, warning: 0, danger: 0 }
+    const c = { allergy: 0, irritant: 0, benefit: 0 }
     all.forEach((ing) => {
-      const s = riskToSafety(ing.risk_level)
-      if (s in c) c[s] += 1
+      if (ing.allergy_flag) c.allergy += 1
+      if (ing.irritant_flag) c.irritant += 1
+      if (ing.moisturizing_flag || ing.soothing_flag) c.benefit += 1
     })
     return c
   }, [all])
@@ -137,28 +131,29 @@ function IngredientsView() {
 
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { key: 'safe', label: '안전 등급', tone: { bg: 'bg-safe/10', text: 'text-safe' } },
-          { key: 'warning', label: '주의 등급', tone: { bg: 'bg-warning/15', text: 'text-[#B58900]' } },
-          { key: 'danger', label: '위험 등급', tone: { bg: 'bg-danger/10', text: 'text-danger' } },
+          { key: 'allergy', label: '알레르기 유발', icon: AlertTriangle, tone: { bg: 'bg-danger/10', text: 'text-danger' }, src: 'EU 알레르겐 26종' },
+          { key: 'irritant', label: '자극 주의', icon: AlertTriangle, tone: { bg: 'bg-warning/15', text: 'text-[#B58900]' }, src: '식약처 사용제한 원료' },
+          { key: 'benefit', label: '보습·진정', icon: Droplet, tone: { bg: 'bg-primary-light', text: 'text-primary' }, src: '효능 성분' },
         ].map((s) => {
-          const active = safetyFilter === s.key
+          const active = flagFilter === s.key
           const cnt = counts[s.key]
+          const Icon = s.icon
           return (
             <button
               key={s.key}
-              onClick={() => setSafetyFilter(active ? 'all' : s.key)}
+              onClick={() => setFlagFilter(active ? 'all' : s.key)}
               className={`bg-card border rounded-2xl p-5 text-left transition ${
                 active ? 'border-primary ring-2 ring-primary-light' : 'border-line hover:border-primary/30'
               }`}
             >
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-8 h-8 rounded-lg grid place-items-center ${s.tone.bg} ${s.tone.text}`}>
-                  <FlaskConical size={16} />
+                  <Icon size={16} />
                 </div>
                 <p className="text-[12px] text-text-sub font-semibold">{s.label}</p>
               </div>
               <p className="text-[24px] font-extrabold text-primary-dark">{cnt}</p>
-              <p className="text-[11px] text-text-sub mt-0.5">현재 페이지 내</p>
+              <p className="text-[11px] text-text-sub mt-0.5">{s.src}</p>
               {active && (
                 <p className="text-[10px] text-primary font-bold mt-2">필터 적용 중</p>
               )}
@@ -207,33 +202,26 @@ function IngredientsView() {
                 <tr className="text-[11px] text-text-sub uppercase tracking-wider border-b border-line">
                   <th className="font-semibold py-3">성분명 (한글)</th>
                   <th className="font-semibold py-3">영문</th>
-                  <th className="font-semibold py-3">안전도</th>
-                  <th className="font-semibold py-3">Risk Lv</th>
                   <th className="font-semibold py-3">속성</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-[13px] text-text-sub">
+                    <td colSpan={3} className="py-12 text-center text-[13px] text-text-sub">
                       조건에 맞는 성분이 없습니다.
                     </td>
                   </tr>
                 ) : (
                   filtered.map((ing) => {
-                    const s = safetyStyle[riskToSafety(ing.risk_level)]
+                    const hasFlag = ing.allergy_flag || ing.irritant_flag || ing.moisturizing_flag || ing.soothing_flag
                     return (
                       <tr key={ing.ingredient_id} className="border-b border-line text-[13px] hover:bg-primary-light/40">
                         <td className="py-3 font-bold text-text-main">{ing.ingredient_name_kr}</td>
                         <td className="py-3 text-text-sub">{ing.ingredient_name_en || '-'}</td>
                         <td className="py-3">
-                          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${s.bg} ${s.text}`}>
-                            {s.label}
-                          </span>
-                        </td>
-                        <td className="py-3 text-text-main font-semibold">{ing.risk_level ?? '-'}</td>
-                        <td className="py-3">
                           <div className="flex items-center gap-1 flex-wrap">
+                            {!hasFlag && <span className="text-[11px] text-text-sub">일반</span>}
                             {ing.allergy_flag && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-danger/10 text-danger" title="알레르기 유발 가능">
                                 <AlertTriangle size={10} /> 알러지
