@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Users,
   FlaskConical,
+  ClipboardList,
   Package,
   MessageSquareText,
   ScrollText,
@@ -11,13 +12,14 @@ import {
 } from 'lucide-react'
 
 export const navItems = [
-  { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'users', icon: Users, label: 'Users' },
-  { id: 'ingredients', icon: FlaskConical, label: 'Ingredients' },
-  { id: 'products', icon: Package, label: 'Products' },
-  { id: 'reviews', icon: MessageSquareText, label: 'Reviews' },
-  { id: 'logs', icon: ScrollText, label: 'Logs' },
-  { id: 'settings', icon: Settings, label: 'Settings' },
+  { id: 'dashboard', icon: LayoutDashboard, label: '대시보드' },
+  { id: 'users', icon: Users, label: '회원 관리' },
+  { id: 'ingredients', icon: FlaskConical, label: '성분 DB' },
+  { id: 'ingredient-manage', icon: ClipboardList, label: '성분 관리' },
+  { id: 'products', icon: Package, label: '제품 관리' },
+  { id: 'reviews', icon: MessageSquareText, label: '리뷰 관리' },
+  { id: 'logs', icon: ScrollText, label: '활동 로그' },
+  { id: 'settings', icon: Settings, label: '설정' },
 ]
 
 function Sidebar({ activePage = 'dashboard', onNavigate, onLogout, open = false, onClose }) {

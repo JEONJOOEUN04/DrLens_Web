@@ -38,7 +38,7 @@ function ScanModal({ product, onClose }) {
 
   const submit = async () => {
     if (!file) {
-      toast?.error?.('사진을 먼저 선택해주세요.')
+      toast('사진을 먼저 선택해주세요.', { tone: 'error' })
       return
     }
     setLoading(true)
@@ -46,10 +46,10 @@ function ScanModal({ product, onClose }) {
       // 관리자 웹: is_admin=true (포인트/제한 없이 검수 등록)
       const res = await scanIngredient(product.product_id, { file, isAdmin: true })
       setResult(res)
-      toast?.success?.(`성분 ${res.detected_count}개 인식 · ${res.newly_confirmed}개 확정`)
+      toast(`성분 ${res.detected_count}개 인식 · ${res.newly_confirmed}개 확정`)
       queryClient.invalidateQueries({ queryKey: ['products'] })
     } catch (err) {
-      toast?.error?.(err?.message ?? '등록에 실패했습니다.')
+      toast(err?.message ?? '등록에 실패했습니다.', { tone: 'error' })
     } finally {
       setLoading(false)
     }

@@ -4,6 +4,7 @@ import TopBar from '../components/TopBar'
 import DashboardView from './views/DashboardView'
 import UsersView from './views/UsersView'
 import IngredientsView from './views/IngredientsView'
+import IngredientManageView from './views/IngredientManageView'
 import ProductsView from './views/ProductsView'
 import ReviewsView from './views/ReviewsView'
 import LogsView from './views/LogsView'
@@ -12,37 +13,42 @@ import GuideView from './views/GuideView'
 
 const pageMeta = {
   dashboard: {
-    title: 'Dashboard',
+    title: '대시보드',
     subtitle: '더마렌즈 사용자 활동 및 성분 분석 데이터 실시간 모니터링',
     Component: DashboardView,
   },
   users: {
-    title: 'Users',
+    title: '회원 관리',
     subtitle: '가입자 현황 및 사용자 계정 관리',
     Component: UsersView,
   },
   ingredients: {
-    title: 'Ingredients',
+    title: '성분 DB',
     subtitle: '화장품 성분 데이터베이스 및 안전도 관리',
     Component: IngredientsView,
   },
+  'ingredient-manage': {
+    title: '성분 관리',
+    subtitle: '제품 성분표 사진 등록(OCR) 및 제품별 성분 관리',
+    Component: IngredientManageView,
+  },
   products: {
-    title: 'Products',
+    title: '제품 관리',
     subtitle: '등록된 화장품 제품 카탈로그',
     Component: ProductsView,
   },
   reviews: {
-    title: 'Reviews',
+    title: '리뷰 관리',
     subtitle: '사용자 리뷰 모니터링 및 승인 관리',
     Component: ReviewsView,
   },
   logs: {
-    title: 'Logs',
-    subtitle: '시스템 이벤트 및 API 호출 로그',
+    title: '활동 로그',
+    subtitle: '전체 사용자 활동 및 시스템 로그',
     Component: LogsView,
   },
   settings: {
-    title: 'Settings',
+    title: '설정',
     subtitle: '계정·알림·보안·API·시스템 설정',
     Component: SettingsView,
   },
