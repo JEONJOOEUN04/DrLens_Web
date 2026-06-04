@@ -17,6 +17,7 @@ import {
   MessageSquareText,
   CheckCheck,
   Loader2,
+  Menu,
 } from 'lucide-react'
 import { searchProducts } from '../api/products'
 import { searchIngredients } from '../api/ingredients'
@@ -38,6 +39,7 @@ function TopBar({
   user,
   onLogout,
   onNavigate,
+  onMenuClick,
   title = 'Dashboard',
   subtitle = '더마렌즈 사용자 활동 및 성분 분석 데이터 실시간 모니터링',
 }) {
@@ -141,20 +143,32 @@ function TopBar({
   }
 
   return (
-    <header className="flex items-center justify-between px-8 py-5 bg-bg">
-      <div>
-        <h1 className="text-[22px] font-extrabold text-primary-dark tracking-tight">
-          {title}
-        </h1>
-        <p className="text-[13px] text-text-sub mt-0.5">{subtitle}</p>
+    <header className="flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 bg-bg">
+      <div className="flex items-center gap-3 min-w-0">
+        {/* 모바일 햄버거 */}
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden shrink-0 w-10 h-10 grid place-items-center rounded-xl bg-card border border-line text-text-sub hover:text-primary"
+          aria-label="메뉴 열기"
+        >
+          <Menu size={20} />
+        </button>
+        <div className="min-w-0">
+          <h1 className="text-[18px] sm:text-[22px] font-extrabold text-primary-dark tracking-tight truncate">
+            {title}
+          </h1>
+          <p className="text-[12px] sm:text-[13px] text-text-sub mt-0.5 truncate hidden sm:block">
+            {subtitle}
+          </p>
+        </div>
       </div>
 
-      <div ref={containerRef} className="flex items-center gap-3">
+      <div ref={containerRef} className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* ========== SEARCH ========== */}
         <div className="relative">
           <Search
             size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-sub"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-sub pointer-events-none"
           />
           <input
             type="text"
@@ -166,11 +180,11 @@ function TopBar({
             }}
             onFocus={() => query.trim() && setOpenMenu('search')}
             placeholder="사용자, 성분, 제품 검색..."
-            className="w-72 h-10 pl-9 pr-4 rounded-xl bg-card border border-line text-sm placeholder:text-text-sub focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+            className="w-40 sm:w-56 lg:w-72 h-10 pl-9 pr-4 rounded-xl bg-card border border-line text-sm placeholder:text-text-sub focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
           />
 
           {openMenu === 'search' && (
-            <div className="absolute left-0 top-12 w-[360px] bg-card border border-line rounded-xl shadow-[0_12px_32px_-12px_rgba(48,110,199,0.25)] py-2 z-30 max-h-[420px] overflow-y-auto">
+            <div className="absolute right-0 sm:left-0 top-12 w-[min(360px,calc(100vw-2rem))] bg-card border border-line rounded-xl shadow-[0_12px_32px_-12px_rgba(48,110,199,0.25)] py-2 z-30 max-h-[420px] overflow-y-auto">
               {searching && results.length === 0 ? (
                 <p className="px-4 py-6 text-center text-[12px] text-text-sub flex items-center justify-center gap-2">
                   <Loader2 size={13} className="animate-spin" /> 검색 중...
@@ -350,22 +364,22 @@ function TopBar({
         <div className="relative">
           <button
             onClick={() => toggle('profile')}
-            className={`flex items-center gap-2 pl-2 pr-3 h-10 rounded-xl bg-card border transition ${
+            className={`flex items-center gap-2 pl-2 pr-2 sm:pr-3 h-10 rounded-xl bg-card border transition ${
               openMenu === 'profile'
                 ? 'border-primary ring-2 ring-primary-light'
                 : 'border-line hover:border-primary/40'
             }`}
           >
-            <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center text-xs font-bold">
+            <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0">
               {initial}
             </div>
-            <div className="leading-tight text-left">
+            <div className="leading-tight text-left hidden md:block">
               <p className="text-[12px] font-bold text-primary-dark">{displayName}</p>
               <p className="text-[10px] text-text-sub">Admin</p>
             </div>
             <ChevronDown
               size={14}
-              className={`text-text-sub transition-transform ${openMenu === 'profile' ? 'rotate-180' : ''}`}
+              className={`text-text-sub transition-transform hidden md:block ${openMenu === 'profile' ? 'rotate-180' : ''}`}
             />
           </button>
 

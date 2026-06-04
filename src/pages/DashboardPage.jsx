@@ -55,6 +55,7 @@ const pageMeta = {
 
 function DashboardPage({ user, onLogout }) {
   const [activePage, setActivePage] = useState('dashboard')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const meta = pageMeta[activePage] ?? pageMeta.dashboard
   const View = meta.Component
 
@@ -64,6 +65,8 @@ function DashboardPage({ user, onLogout }) {
         activePage={activePage}
         onNavigate={setActivePage}
         onLogout={onLogout}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       <main className="flex-1 min-w-0 flex flex-col">
@@ -73,9 +76,10 @@ function DashboardPage({ user, onLogout }) {
           onNavigate={setActivePage}
           title={meta.title}
           subtitle={meta.subtitle}
+          onMenuClick={() => setSidebarOpen(true)}
         />
 
-        <div className="flex-1 px-8 pb-10">
+        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-10">
           <View onNavigate={setActivePage} user={user} />
         </div>
       </main>
