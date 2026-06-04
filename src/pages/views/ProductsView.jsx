@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { Search, Plus, Package, Star, AlertCircle, Loader2 } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query'
+import { Search, Plus, Package, Star, AlertCircle, Loader2, Camera, Image as ImageIcon, FlaskConical, CheckCircle2 } from 'lucide-react'
 import Modal from '../../components/Modal'
 import Pagination from '../../components/Pagination'
 import { useToast } from '../../components/Toast'
-import { listProducts, searchProducts, listCategories, listByCategory } from '../../api/products'
+import { listProducts, searchProducts, listCategories, listByCategory, scanIngredient } from '../../api/products'
 
 const PAGE_SIZE = 20
 
@@ -18,12 +18,120 @@ function useDebounce(value, delay = 350) {
   return debounced
 }
 
+// ===== 성분 스캔 모달 =====
+function ScanModal({ product, onClose }) {
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const fileRef = useRef(null)
+  const [preview, setPreview] = useState(null)
+  const [file, setFile] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const pickFile = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setFile(f)
+    setResult(null)
+    setPreview(URL.createObjectURL(f))
+  }
+
+  const submit = async () => {
+    if (!file) {
+      toast?.error?.('사진을 먼저 선택해주세요.')
+      return
+    }
+    setLoading(true)
+    try {
+      // 관리자 웹: is_admin=true (포인트/제한 없이 검수 등록)
+      const res = await scanIngredient(product.product_id, { file, isAdmin: true })
+      setResult(res)
+      toast?.success?.(`성분 ${res.detected_count}개 인식 · ${res.newly_confirmed}개 확정`)
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+    } catch (err) {
+      toast?.error?.(err?.message ?? '등록에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={!!product}
+      onClose={onClose}
+      title="성분표 사진 등록"
+      subtitle={product?.product_name}
+      footer={
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClose}
+            className="h-10 px-4 rounded-xl bg-bg border border-line text-[13px] font-bold text-text-sub"
+          >
+            닫기
+          </button>
+          <button
+            onClick={submit}
+            disabled={loading || !file}
+            className="h-10 px-4 rounded-xl bg-primary text-white text-[13px] font-bold flex items-center gap-1.5 disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />}
+            성분 분석 등록
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {/* 미리보기 */}
+        <div className="aspect-video rounded-xl bg-bg border border-line/60 grid place-items-center overflow-hidden">
+          {preview ? (
+            <img src={preview} alt="미리보기" className="max-w-full max-h-full object-contain" />
+          ) : (
+            <div className="text-center text-text-sub">
+              <ImageIcon size={28} className="mx-auto mb-2 opacity-50" />
+              <p className="text-[12px]">성분표가 잘 보이는 사진을 등록해주세요</p>
+            </div>
+          )}
+        </div>
+
+        {/* 촬영 / 갤러리 버튼 */}
+        <div className="grid grid-cols-2 gap-3">
+          <label className="h-11 rounded-xl bg-primary-light text-primary text-[13px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:brightness-105">
+            <Camera size={16} /> 사진 촬영
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={pickFile} />
+          </label>
+          <label className="h-11 rounded-xl bg-card border border-line text-text-main text-[13px] font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:border-primary/40">
+            <ImageIcon size={16} /> 갤러리에서 선택
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
+          </label>
+        </div>
+
+        {/* 결과 */}
+        {result && (
+          <div className="rounded-xl bg-safe/10 border border-safe/30 p-4">
+            <p className="flex items-center gap-1.5 text-[13px] font-bold text-safe mb-1">
+              <CheckCircle2 size={15} /> 등록 완료
+            </p>
+            <p className="text-[12px] text-text-sub">
+              인식된 성분 {result.detected_count}개 · 이번에 확정된 성분 {result.newly_confirmed}개
+            </p>
+            <p className="text-[11px] text-text-sub mt-1">
+              ※ 2명 이상이 등록한 성분만 제품 성분으로 확정됩니다.
+            </p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+
 function ProductsView() {
   const toast = useToast()
   const [query, setQuery] = useState('')
   const [activeCategoryId, setActiveCategoryId] = useState(null) // null = 전체
   const [page, setPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
+  const [scanProduct, setScanProduct] = useState(null) // 성분 스캔 대상 제품
   const debouncedQuery = useDebounce(query)
 
   // 검색어/카테고리 변경 시 1페이지로 리셋
@@ -233,7 +341,7 @@ function ProductsView() {
                 <p className="text-[14px] font-bold text-text-main leading-tight line-clamp-2 mb-2 min-h-[34px]">
                   {p.product_name}
                 </p>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <span className="text-[14px] font-extrabold text-primary-dark">
                     {p.price ? `${p.price.toLocaleString()}원` : '-'}
                   </span>
@@ -244,6 +352,12 @@ function ProductsView() {
                     </span>
                   )}
                 </div>
+                <button
+                  onClick={() => setScanProduct(p)}
+                  className="w-full h-9 rounded-lg bg-primary-light text-primary text-[12px] font-bold flex items-center justify-center gap-1.5 hover:brightness-105 transition"
+                >
+                  <FlaskConical size={13} /> 성분표 사진 등록
+                </button>
               </div>
             ))}
           </section>
@@ -282,6 +396,10 @@ function ProductsView() {
           백엔드에 <code className="font-mono text-primary bg-primary-light px-1.5 py-0.5 rounded">POST /api/products/</code> 엔드포인트가 추가되면 사용 가능합니다.
         </p>
       </Modal>
+
+      {scanProduct && (
+        <ScanModal product={scanProduct} onClose={() => setScanProduct(null)} />
+      )}
     </div>
   )
 }

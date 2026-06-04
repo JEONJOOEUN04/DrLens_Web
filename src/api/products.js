@@ -38,3 +38,15 @@ export async function listByCategory(categoryId, { page = 1, size = 20 } = {}) {
   })
   return unwrap(res)
 }
+
+// 제품 성분 사진 스캔 등록 (관리자: is_admin=true)
+export async function scanIngredient(productId, { file, userId, isAdmin = false } = {}) {
+  const form = new FormData()
+  form.append('image', file)
+  if (userId) form.append('user_id', userId)
+  if (isAdmin) form.append('is_admin', 'true')
+  const res = await client.post(`/api/products/${productId}/ingredient-scan/`, form, {
+    headers: { 'Content-Type': undefined }, // 브라우저가 boundary 포함해 자동 설정
+  })
+  return unwrap(res)
+}
