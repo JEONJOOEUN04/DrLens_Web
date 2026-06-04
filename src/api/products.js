@@ -47,6 +47,7 @@ export async function scanIngredient(productId, { file, userId, isAdmin = false 
   if (isAdmin) form.append('is_admin', 'true')
   const res = await client.post(`/api/products/${productId}/ingredient-scan/`, form, {
     headers: { 'Content-Type': undefined }, // 브라우저가 boundary 포함해 자동 설정
+    timeout: 150000, // OCR 분석은 오래 걸리므로 150초
   })
   return unwrap(res)
 }
