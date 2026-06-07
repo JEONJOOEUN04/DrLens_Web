@@ -1,5 +1,13 @@
 import { client, unwrap } from './client'
 
+// ===== 회원 목록 =====
+export async function getUsersList({ q = '', page = 1, size = 20 } = {}) {
+  const res = await client.get('/api/admin/users', {
+    params: { ...(q && { q }), page, size },
+  })
+  return unwrap(res) // { users:[...], total_count, total_pages, page }
+}
+
 // ===== 유저 현황 =====
 export async function getUsersCount() {
   const res = await client.get('/api/admin/stats/users/count')

@@ -1,316 +1,189 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import {
-  User,
-  Heart,
-  Star,
-  FlaskConical,
-  Sparkles,
-  Loader2,
-  Package,
-  Mail,
-  Calendar,
-  AlertCircle,
-} from 'lucide-react'
-import {
-  getMyPage,
-  getMyLikes,
-  getMyReviews,
-  getMyAnalysis,
-  getMyRecommendations,
-  getSkinProfile,
-} from '../../api/users'
+import { useState, useEffect } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { Users, Search, Loader2, AlertCircle, Shield, Coins } from 'lucide-react'
+import Pagination from '../../components/Pagination'
+import SkinTypeChart from '../../components/charts/SkinTypeChart'
+import ProviderChart from '../../components/charts/ProviderChart'
+import { getUsersList, getUsersCount } from '../../api/admin'
 
-const TABS = [
-  { id: 'likes', label: '좋아요한 제품', icon: Heart },
-  { id: 'reviews', label: '내 리뷰', icon: Star },
-  { id: 'analysis', label: '분석 기록', icon: FlaskConical },
-  { id: 'recommendations', label: '추천 제품', icon: Sparkles },
-]
+const PAGE_SIZE = 20
 
-function statusFromRisk(risk) {
-  if (risk == null) return { style: 'bg-line/40 text-text-sub', label: '-' }
-  if (risk <= 3) return { style: 'bg-safe/10 text-safe', label: '안전' }
-  if (risk <= 6) return { style: 'bg-warning/15 text-[#B58900]', label: '주의' }
-  return { style: 'bg-danger/10 text-danger', label: '위험' }
+function useDebounce(value, delay = 350) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
 }
 
-function Stars({ count = 0 }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} size={11} className={n <= count ? 'fill-warning text-warning' : 'text-line'} />
-      ))}
-    </div>
-  )
-}
+function UsersView() {
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const debouncedQuery = useDebounce(query)
 
-function UsersView({ user }) {
-  const userId = user?.user_id
-  const [tab, setTab] = useState('likes')
+  useEffect(() => { setPage(1) }, [debouncedQuery])
 
-  const { data: mypage } = useQuery({
-    queryKey: ['mypage', userId],
-    queryFn: () => getMyPage(userId),
-    enabled: !!userId,
+  // 가입자 KPI
+  const { data: countData } = useQuery({
+    queryKey: ['admin-users-count'],
+    queryFn: getUsersCount,
+    staleTime: 1000 * 60 * 5,
   })
+  const stats = countData?.stats ?? {}
 
-  const { data: skinProfile } = useQuery({
-    queryKey: ['skin-profile', userId],
-    queryFn: () => getSkinProfile(userId),
-    enabled: !!userId,
-    retry: false,
+  // 회원 목록
+  const { data, isLoading, isError, error, isFetching } = useQuery({
+    queryKey: ['admin-users-list', { q: debouncedQuery, page }],
+    queryFn: () => getUsersList({ q: debouncedQuery, page, size: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   })
+  const users = data?.users ?? []
+  const totalPages = data?.total_pages ?? null
 
-  const tabQuery = useQuery({
-    queryKey: ['mypage-tab', userId, tab],
-    queryFn: () => {
-      if (tab === 'likes') return getMyLikes(userId, { page: 1, size: 20 })
-      if (tab === 'reviews') return getMyReviews(userId, { page: 1, size: 20 })
-      if (tab === 'analysis') return getMyAnalysis(userId, { page: 1, size: 20 })
-      if (tab === 'recommendations') return getMyRecommendations(userId, { page: 1, size: 20 })
-    },
-    enabled: !!userId,
-  })
-
-  const summary = mypage?.activity_summary ?? {}
-  const profile = mypage?.user ?? user ?? {}
-  const skin = skinProfile?.profile
+  const fmt = (n) => (n != null ? n.toLocaleString() : '-')
 
   return (
     <div className="space-y-5">
-      {/* 프로필 헤더 */}
-      <section className="bg-card border border-line rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-        <div className="w-16 h-16 rounded-full bg-primary text-white grid place-items-center text-2xl font-extrabold shrink-0">
-          {(profile.nickname?.[0] ?? profile.email?.[0] ?? 'U').toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-[20px] font-extrabold text-primary-dark">
-            {profile.nickname ?? profile.email?.split('@')[0] ?? 'User'}
-          </h2>
-          <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[12px] text-text-sub">
-            <span className="flex items-center gap-1">
-              <Mail size={12} /> {profile.email ?? '-'}
-            </span>
-            {profile.created_at && (
-              <span className="flex items-center gap-1">
-                <Calendar size={12} /> 가입 {profile.created_at}
-              </span>
-            )}
-          </div>
-          {skin && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {skin.skin_type?.name_kr && (
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-primary-light text-primary">
-                  {skin.skin_type.name_kr}
-                </span>
-              )}
-              {(skin.skin_concerns ?? []).map((c) => (
-                <span key={c} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-bg border border-line text-text-sub">
-                  #{c}
-                </span>
-              ))}
-              {(skin.allergies ?? []).map((a) => (
-                <span key={a} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-danger/8 text-danger">
-                  알러지: {a}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* KPI */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: '좋아요', value: summary.like_count ?? 0, icon: Heart },
-          { label: '내 리뷰', value: summary.review_count ?? 0, icon: Star },
-          { label: '분석 횟수', value: summary.analysis_count ?? 0, icon: FlaskConical },
-          { label: '추천 받은 제품', value: '-', icon: Sparkles, note: '하단 탭에서 확인' },
+          { label: '전체 가입자', value: fmt(stats.total), sub: '누적' },
+          { label: '활성 사용자', value: fmt(stats.active_last_30d), sub: '최근 30일' },
+          { label: '휴면', value: fmt(stats.dormant), sub: '30일 미접속' },
+          { label: '정지', value: fmt(stats.banned), sub: '비활성 계정' },
         ].map((s) => (
-          <div key={s.label} className="bg-card border border-line rounded-2xl p-4">
+          <div key={s.label} className="bg-card border border-line rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-lg bg-primary-light grid place-items-center text-primary">
-                <s.icon size={15} />
+                <Users size={15} />
               </div>
-              <p className="text-[11px] text-text-sub font-semibold">{s.label}</p>
+              <p className="text-[12px] text-text-sub font-semibold">{s.label}</p>
             </div>
-            <p className="text-[22px] font-extrabold text-primary-dark">{s.value}</p>
-            {s.note && <p className="text-[10px] text-text-sub mt-0.5">{s.note}</p>}
+            <p className="text-[24px] font-extrabold text-primary-dark">{s.value}</p>
+            <p className="text-[11px] text-text-sub mt-0.5">{s.sub}</p>
           </div>
         ))}
       </section>
 
-      {/* 탭 */}
-      <section className="bg-card border border-line rounded-2xl">
-        <div className="border-b border-line px-3 flex gap-1 overflow-x-auto">
-          {TABS.map((t) => {
-            const Icon = t.icon
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-3.5 text-[13px] font-bold border-b-2 transition whitespace-nowrap ${
-                  active
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-text-sub hover:text-primary-dark'
-                }`}
-              >
-                <Icon size={14} /> {t.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="p-5">
-          {tabQuery.isLoading ? (
-            <div className="py-12 text-center">
-              <Loader2 size={22} className="text-primary animate-spin mx-auto mb-2" />
-              <p className="text-[12px] text-text-sub">불러오는 중...</p>
-            </div>
-          ) : tabQuery.isError ? (
-            <div className="py-12 text-center">
-              <AlertCircle size={22} className="text-danger mx-auto mb-2" />
-              <p className="text-[12px] font-bold text-danger">
-                {tabQuery.error?.message ?? '불러오기 실패'}
-              </p>
-            </div>
-          ) : (
-            <TabContent tab={tab} data={tabQuery.data} />
-          )}
-        </div>
+      {/* 분포 차트 */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <SkinTypeChart />
+        <ProviderChart />
       </section>
-    </div>
-  )
-}
 
-function TabContent({ tab, data }) {
-  if (tab === 'likes') {
-    const items = data?.liked_products ?? []
-    if (items.length === 0) return <Empty msg="좋아요한 제품이 없습니다." />
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {items.map((p) => (
-          <ProductCard key={p.product_id} product={p} subtitle={p.created_at} />
-        ))}
-      </div>
-    )
-  }
-  if (tab === 'reviews') {
-    const items = data?.reviews ?? []
-    if (items.length === 0) return <Empty msg="작성한 리뷰가 없습니다." />
-    return (
-      <ul className="divide-y divide-line">
-        {items.map((r) => (
-          <li key={r.review_id} className="py-4 first:pt-0 last:pb-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <p className="text-[13px] font-bold text-text-main">{r.product_name}</p>
-              <Stars count={r.rating} />
-            </div>
-            <p className="text-[13px] text-text-main leading-relaxed">{r.review_text}</p>
-            <p className="text-[11px] text-text-sub mt-1.5">{r.created_at}</p>
-          </li>
-        ))}
-      </ul>
-    )
-  }
-  if (tab === 'analysis') {
-    const items = data?.history ?? []
-    if (items.length === 0) return <Empty msg="분석 기록이 없습니다." />
-    return (
-      <table className="w-full text-left">
-        <thead>
-          <tr className="text-[11px] text-text-sub uppercase tracking-wider border-b border-line">
-            <th className="font-semibold py-3">제품</th>
-            <th className="font-semibold py-3">유형</th>
-            <th className="font-semibold py-3">결과</th>
-            <th className="font-semibold py-3">위험도</th>
-            <th className="font-semibold py-3 text-right">시간</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((row) => {
-            const s = statusFromRisk(row.risk_score)
-            return (
-              <tr key={row.analysis_id} className="border-b border-line text-[13px] hover:bg-primary-light/30">
-                <td className="py-3 font-bold text-text-main">{row.product_name ?? `#${row.product_id}`}</td>
-                <td className="py-3 text-text-sub">
-                  {row.analysis_type === 'OCR_ANALYSIS' ? 'OCR' : '제품검색'}
-                </td>
-                <td className="py-3">
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${s.style}`}>
-                    {s.label}
-                  </span>
-                </td>
-                <td className="py-3 font-semibold text-text-main">{row.risk_score ?? '-'}</td>
-                <td className="py-3 text-right text-text-sub font-medium text-[12px]">{row.created_at}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    )
-  }
-  if (tab === 'recommendations') {
-    const items = data?.recommendations ?? []
-    if (items.length === 0) return <Empty msg="추천 받은 제품이 없습니다. 추천을 생성하려면 앱에서 설문을 완료해주세요." />
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {items.map((r) => (
-          <div key={r.recommendation_id} className="border border-line rounded-2xl p-4 hover:border-primary/30 transition">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center text-xs font-bold">
-                {r.rank_order}
-              </div>
-              <p className="text-[11px] text-text-sub">추천 #{r.rank_order}</p>
-              {r.score != null && (
-                <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded bg-primary-light text-primary">
-                  점수 {Number(r.score).toFixed(1)}
-                </span>
-              )}
-            </div>
-            <p className="text-[14px] font-bold text-text-main truncate">{r.product_name}</p>
-            <p className="text-[12px] text-text-sub mt-1.5 line-clamp-2">{r.reason}</p>
+      {/* 회원 목록 */}
+      <section className="bg-card border border-line rounded-2xl p-5">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <h3 className="text-[15px] font-extrabold text-primary-dark">회원 목록</h3>
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-sub" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="이메일, 닉네임 검색..."
+              className="w-full h-10 pl-9 pr-9 rounded-xl bg-bg border border-line text-[13px] placeholder:text-text-sub focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light"
+            />
+            {isFetching && (
+              <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-primary animate-spin" />
+            )}
           </div>
-        ))}
-      </div>
-    )
-  }
-  return null
-}
+        </div>
 
-function ProductCard({ product, subtitle }) {
-  return (
-    <div className="border border-line rounded-2xl p-3 hover:shadow-[0_8px_20px_-12px_rgba(48,110,199,0.3)] transition">
-      <div className="aspect-square rounded-xl bg-white border border-line/60 flex items-center justify-center mb-2 overflow-hidden p-2.5">
-        {product.image_url ? (
-          <img
-            src={product.image_url}
-            alt=""
-            className="max-w-full max-h-full object-contain"
-            onError={(e) => (e.currentTarget.style.display = 'none')}
-          />
+        {isLoading ? (
+          <div className="py-12 text-center">
+            <Loader2 size={22} className="text-primary animate-spin mx-auto mb-2" />
+            <p className="text-[12px] text-text-sub">불러오는 중...</p>
+          </div>
+        ) : isError ? (
+          <div className="py-12 text-center">
+            <AlertCircle size={22} className="text-danger mx-auto mb-2" />
+            <p className="text-[12px] font-bold text-danger">{error?.message ?? '불러오기 실패'}</p>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="py-12 text-center text-[13px] text-text-sub">회원이 없습니다.</div>
         ) : (
-          <Package size={28} className="text-primary" />
-        )}
-      </div>
-      <p className="text-[13px] font-bold text-text-main truncate">{product.product_name}</p>
-      <div className="flex items-center justify-between mt-1">
-        <p className="text-[12px] font-extrabold text-primary-dark">
-          {product.price ? `${product.price.toLocaleString()}원` : '-'}
-        </p>
-        {subtitle && <p className="text-[10px] text-text-sub">{subtitle}</p>}
-      </div>
-    </div>
-  )
-}
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[11px] text-text-sub uppercase tracking-wider border-b border-line">
+                    <th className="font-semibold py-3">회원</th>
+                    <th className="font-semibold py-3">피부타입</th>
+                    <th className="font-semibold py-3">가입</th>
+                    <th className="font-semibold py-3 text-center">리뷰</th>
+                    <th className="font-semibold py-3 text-center">좋아요</th>
+                    <th className="font-semibold py-3 text-right">포인트</th>
+                    <th className="font-semibold py-3 text-right">가입일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.user_id} className="border-b border-line text-[13px] hover:bg-primary-light/30">
+                      <td className="py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-primary text-white grid place-items-center text-[11px] font-bold shrink-0">
+                            {(u.nickname?.[0] ?? u.email?.[0] ?? 'U').toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-text-main truncate flex items-center gap-1">
+                              {u.nickname}
+                              {u.is_staff && (
+                                <Shield size={11} className="text-primary" title="관리자" />
+                              )}
+                            </p>
+                            <p className="text-[11px] text-text-sub truncate">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        {u.skin_type ? (
+                          <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-primary-light text-primary">
+                            {u.skin_type_code}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-text-sub">미설정</span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                          u.provider === 'kakao' ? 'bg-warning/15 text-[#B58900]' : 'bg-bg text-text-sub'
+                        }`}>
+                          {u.provider === 'kakao' ? '카카오' : '이메일'}
+                        </span>
+                      </td>
+                      <td className="py-3 text-center text-text-main font-semibold">{u.review_count}</td>
+                      <td className="py-3 text-center text-text-main font-semibold">{u.like_count}</td>
+                      <td className="py-3 text-right">
+                        <span className="inline-flex items-center gap-1 font-bold text-primary-dark">
+                          <Coins size={12} className="text-warning" />{u.points}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right text-text-sub text-[12px]">
+                        {String(u.created_at).slice(0, 10)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-function Empty({ msg }) {
-  return (
-    <div className="py-12 text-center">
-      <User size={28} className="text-text-sub mx-auto mb-2" />
-      <p className="text-[13px] text-text-sub">{msg}</p>
+            <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
+              <p className="text-[12px] text-text-sub">
+                전체 {fmt(data?.total_count)}명 · {page}페이지
+              </p>
+              <Pagination
+                page={page}
+                onPageChange={setPage}
+                hasMore={users.length >= PAGE_SIZE}
+                totalPages={totalPages}
+                disabled={isFetching}
+              />
+            </div>
+          </>
+        )}
+      </section>
     </div>
   )
 }
